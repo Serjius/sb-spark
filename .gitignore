@@ -13,6 +13,7 @@ project/plugins/project/
 /src/main/g8/target/
 /project/project/
 data.out/
+/.target/
 
 # sbt specific
 .cache

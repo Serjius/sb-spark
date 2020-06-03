@@ -1,4 +1,4 @@
-name := "lab03"
+name := "data_mart"
 
 version := "1.0"
 

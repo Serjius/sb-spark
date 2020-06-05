@@ -1,13 +1,9 @@
-import org.apache.commons.text.StringEscapeUtils
-import org.apache.logging.log4j.scala.Logging
-import org.apache.spark.ml.feature._
-import org.apache.spark.ml.linalg.SparseVector
-import org.apache.spark.sql.functions.regexp_replace
-import org.apache.spark.sql.{functions => f}
-import org.apache.spark.sql.{DataFrame, SparkSession, cassandra}
-import org.postgresql.Driver
-import org.elasticsearch.spark.sql
+import java.nio.charset.CodingErrorAction
 
+import org.apache.logging.log4j.scala.Logging
+import org.apache.spark.sql.{SparkSession, functions => f}
+
+import scala.io.{Codec, Source}
 
 case class Clients(uid: String, gender: String, age: Int)
 
@@ -20,7 +16,7 @@ object data_mart extends Logging {
     private val POSTGRESQL_IP = "10.0.1.9"
     private val POSTGRESQL_PORT = "5432"
     private val POSTGRESQL_USER = "sergey_puchnin"
-    private val POSTGRESQL_PWD = "getFromConfig" //TODO REMOVE PASSWORD
+
     private val POSTGRESQL_DB = "labdata"
     private val POSTGRESQL_TABLE = "domain_cats"
     private val POSTGRESQL_RESULT_TABLE = "clients"
@@ -28,6 +24,37 @@ object data_mart extends Logging {
     private val ELASTIC_NODES = "10.0.1.9"
     private val ELASTIC_PORT = "9200"
     private val ELASTIC_INDEX = "visits"
+
+    private val JSON_FILE_NAME = "hdfs:///labs/laba03/weblogs.json"
+
+    private val testUserUID = "d50192e5-c44e-4ae8-ae7a-7cfe67c8b777"
+
+    private def loadPassword(): String = {
+
+        implicit val codec: Codec = Codec("UTF-8")
+        codec.onMalformedInput(CodingErrorAction.REPLACE)
+        codec.onUnmappableCharacter(CodingErrorAction.REPLACE)
+
+        logger.info("Start application")
+        try {
+            val in = "secret.txt"
+            val src = Source.fromFile(in)
+            logger.info(s"Read file $in to vector")
+            val strArr = src.getLines.toArray
+            src.close()
+            strArr(0)
+
+        }
+        catch {
+            case e: Throwable =>
+                logger.error(e.getMessage)
+                logger.error(e.getStackTrace.mkString("\n"))
+                System.exit(-1)
+                ""
+        }
+
+
+    }
 
 
     def main(args: Array[String]): Unit = {
@@ -41,8 +68,7 @@ object data_mart extends Logging {
 
         spark.sparkContext.setLogLevel("WARN")
 
-        // SparkSession has implicits
-        //import spark.implicits._
+        val POSTGRESQL_PWD =  loadPassword()
 
 
         println
@@ -93,7 +119,7 @@ object data_mart extends Logging {
         val domainCategoryDF = spark.read
             .format("jdbc")
             .option("driver", driver)
-            .option("url", s"jdbc:postgresql://${POSTGRESQL_IP}:${POSTGRESQL_PORT}/${POSTGRESQL_DB}")
+            .option("url", s"jdbc:postgresql://$POSTGRESQL_IP:$POSTGRESQL_PORT/$POSTGRESQL_DB")
             .option("dbtable", POSTGRESQL_TABLE)
             .option("user", POSTGRESQL_USER)
             .option("password", POSTGRESQL_PWD)
@@ -119,7 +145,9 @@ object data_mart extends Logging {
         elasticDF.show(1, truncate = 100, vertical = true)
 
 
-        val onlyShopUserDF = elasticDF.filter(f.col("uid") isNotNull)
+        val onlyShopUserDF = elasticDF.filter(f.col("uid").isNotNull)
+
+        onlyShopUserDF.filter(f.col("uid") === testUserUID).show(false)
 
 
         //add 1 for pivot. replace "-" and " " to _. lowercase. add shop_ prefix to column_name
@@ -138,20 +166,24 @@ object data_mart extends Logging {
         println("Filter group by UID, Category")
         println(shopResultDF.count)
         shopResultDF.printSchema()
-        shopResultDF.show(1, 100, true)
+        shopResultDF.show(1, 100, vertical = true)
 
         //just a sample
-        tableColumnsListDF.filter(f.col("uid") === "310dfbe9-cac6-4d79-a984-0bc940b9581e").show(false)
+        tableColumnsListDF.filter(f.col("uid") === testUserUID).show(10, truncate = 100)
 
         println("Elastic done")
 
 
         println("JSON start")
         //load data
-        val jsonDF = spark.read.json("hdfs:///labs/laba03/weblogs.json").toDF()
+        val jsonDF = spark.read.json(JSON_FILE_NAME).toDF()
 
         //remove nulls
-        val onlyWebUsersDF = jsonDF.filter(f.col("uid") isNotNull)
+        val onlyWebUsersDF = jsonDF.filter(f.col("uid").isNotNull)
+
+        //show raw logs for test user
+        onlyWebUsersDF.filter(f.col("uid") === testUserUID).show(false)
+
 
         //check column names and types
         onlyWebUsersDF.printSchema()
@@ -165,7 +197,6 @@ object data_mart extends Logging {
             .withColumn("full_domain", f.callUDF("parse_url", f.col("web_url"), f.lit("HOST")))
 
         //remove www. from domain names
-        //TODO Remove if checker doesn't eat it.
         val webShopUsrDomainDF = parseUrlDF.select(f.col("uid"), f.col("full_domain"))
             .withColumn("domain",
                 f.regexp_replace(f.col("full_domain"), "^www.", ""))
@@ -192,7 +223,7 @@ object data_mart extends Logging {
             f.col("category"),
             f.lit(1).alias("count"))
             .withColumn("webCategory", f.concat(f.lit("web_"), f.col("category")))
-        webPivotDF.show(10,  150)
+        webPivotDF.show(10, 150)
 
         //pivot table
         val webResultDF = webPivotDF.groupBy("uid").pivot("webCategory").sum("count").cache()
@@ -201,7 +232,7 @@ object data_mart extends Logging {
 
 
         //just a sample
-        val tst3 = webResultDF.filter(f.col("uid") === "d50192e5-c44e-4ae8-ae7a-7cfe67c8b777").show(10, truncate = 100, true)
+        webResultDF.filter(f.col("uid") === testUserUID).show(20, truncate = 100, vertical = true)
 
 
         val joinedClientShop = clientResultDF.join(shopResultDF, Seq("uid"), "left")
@@ -214,14 +245,15 @@ object data_mart extends Logging {
         joinedClientShopWeb.groupBy("gender", "age_cat").count.show
 
 
+
         //from final result
-        joinedClientShopWeb.filter(f.col("uid") === "b9068896-2724-410b-b875-2e8c25dee8c0").show(1,150, true)
+        joinedClientShopWeb.filter(f.col("uid") === testUserUID).show(1, 100, vertical = true)
         //from Client
-        clientAgeDF.filter(f.col("uid") === "b9068896-2724-410b-b875-2e8c25dee8c0").show(false)
+        clientAgeDF.filter(f.col("uid") === testUserUID).show(false)
         //from Shop
-        tableColumnsListDF.filter(f.col("uid") === "b9068896-2724-410b-b875-2e8c25dee8c0").show(false)
+        tableColumnsListDF.filter(f.col("uid") === testUserUID).show(false)
         //from web
-        webCategoryDF.filter(f.col("uid") === "b9068896-2724-410b-b875-2e8c25dee8c0").show(false)
+        webCategoryDF.filter(f.col("uid") === testUserUID).show(false)
 
 
         println("join parts done")
@@ -231,10 +263,10 @@ object data_mart extends Logging {
 
         joinedClientShopWeb
             .write
-            .mode("overwrite")
+            .mode("append")
             .format("jdbc")
             .option("driver", driver)
-            .option("url", s"jdbc:postgresql://${POSTGRESQL_IP}:${POSTGRESQL_PORT}/")
+            .option("url", s"jdbc:postgresql://$POSTGRESQL_IP:$POSTGRESQL_PORT/")
             .option("dbtable", POSTGRESQL_RESULT_TABLE)
             .option("user", POSTGRESQL_USER)
             .option("password", POSTGRESQL_PWD)
@@ -244,5 +276,6 @@ object data_mart extends Logging {
         println("check from psql ")
 
     }
+
 
 }

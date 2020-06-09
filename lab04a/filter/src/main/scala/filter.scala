@@ -1,3 +1,6 @@
+import scala.reflect.io.Directory
+import java.io.File
+
 import java.time.ZonedDateTime
 import java.util.TimeZone
 
@@ -87,11 +90,16 @@ object filter {
 
         println("Clean up")
         //Remove previous tries
-        val viewFS = FileSystem.get(spark.sparkContext.hadoopConfiguration)
-        val viewPath = new Path(output_dir_prefix + "/" + viewSuffix)
-        if (viewFS.exists(viewPath))
-            viewFS.delete(viewPath, true)
 
+        if (output_dir_prefix.startsWith("file:///")) {
+            val directory = new Directory(new File(output_dir_prefix + "/" + viewSuffix))
+            directory.deleteRecursively()
+        } else {
+            val viewFS = FileSystem.get(spark.sparkContext.hadoopConfiguration)
+            val viewPath = new Path(output_dir_prefix + "/" + viewSuffix)
+            if (viewFS.exists(viewPath))
+                viewFS.delete(viewPath, true)
+        }
 
         //filter only view and cache it
         val onlyViewDF = eventDF
@@ -114,19 +122,22 @@ object filter {
         onlyViewDF.unpersist()
 
 
-
-
         //Work with BUY
         val buySuffix = "buy"
 
         println("Work with BUY")
         println("Clean up")
         //Remove previous tries
-        val BuyFS = FileSystem.get(spark.sparkContext.hadoopConfiguration)
-        val buyPath = new Path(output_dir_prefix + "/" + buySuffix)
-        if (BuyFS.exists(buyPath))
-            BuyFS.delete(buyPath, true)
 
+        if (output_dir_prefix.startsWith("file:///")) {
+            val directory = new Directory(new File(output_dir_prefix + "/" + buySuffix))
+            directory.deleteRecursively()
+        } else {
+            val BuyFS = FileSystem.get(spark.sparkContext.hadoopConfiguration)
+            val buyPath = new Path(output_dir_prefix + "/" + buySuffix)
+            if (BuyFS.exists(buyPath))
+                BuyFS.delete(buyPath, true)
+        }
 
         //filter only view and cache it
         val onlyBuyDF = eventDF

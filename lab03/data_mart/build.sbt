@@ -16,6 +16,4 @@ libraryDependencies ++= Seq("org.apache.spark" %% "spark-core" % "2.4.5" % Provi
     "com.datastax.spark" %% "spark-cassandra-connector" % "2.4.3",
     "org.postgresql" % "postgresql" % "42.2.12",
     "org.elasticsearch" %% "elasticsearch-spark-20" % "6.8.9"
-
-
 )

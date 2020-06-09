@@ -32,7 +32,10 @@ object filter {
 
         val topicName = spark.sparkContext.getConf.get("spark.filter.topic_name", "lab04_input_data")
         println(topicName)
-        val topicOffsets = spark.sparkContext.getConf.get("spark.filter.offset", "earliest")
+
+        val topicOffsetParam = spark.sparkContext.getConf.get("spark.filter.offset", "earliest")
+        val topicOffsets = if (topicOffsetParam == "earliest") "earliest" else s"""{"$topicName":{"0":$topicOffsetParam}}"""
+
         println(topicOffsets)
         var output_dir_prefix = spark.sparkContext.getConf.get("spark.filter.output_dir_prefix", "hdfs:///user/sergey.puchnin/visits")
 

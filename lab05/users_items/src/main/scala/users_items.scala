@@ -123,7 +123,7 @@ object users_items {
                 println(s"Loaded $previousMatrixDF.count from previous matrix")
                 previousMatrixDF
                     .write
-                    .mode("overwrite")
+                    .mode("append")
                     .parquet(outDirPrefix + "/" + maxDateUserData)
                 println(s"try to save into current $maxDateUserData")
             }

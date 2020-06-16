@@ -94,7 +94,7 @@ object users_items {
             .na.fill(0)
             .cache()
 
-        println(s"row in pivoted table: ${resultDF.count}")
+        println(s"rows in CURRENT pivoted table: ${resultDF.count}")
         println("Write result to parquet")
         resultDF
             .write
@@ -111,23 +111,30 @@ object users_items {
             println(matrixFolders.mkString(" "))
 
             scala.util.Sorting.quickSort(matrixFolders)
-            val sortedMatrixFolders = matrixFolders.filter(! _.contains(maxDateUserData)).reverse
-            val previousMatrixFolder = if (! sortedMatrixFolders.isEmpty) sortedMatrixFolders(0) else ""
+            val sortedMatrixFolders = matrixFolders.filter(!_.contains(maxDateUserData)).reverse
+            val previousMatrixFolder = if (!sortedMatrixFolders.isEmpty) sortedMatrixFolders(0) else ""
 
             if (!previousMatrixFolder.isEmpty) {
-                println(s"Previous path not empty! Try to load from $previousMatrixFolder and add to $maxDateUserData")
+                println(s"Previous path not empty!")
+                println(s"Try to load from '$previousMatrixFolder' and add to '$outDirPrefix/$maxDateUserData'")
                 val previousMatrixDF = spark
                     .read
                     .parquet(previousMatrixFolder)
 
-                println(s"Loaded $previousMatrixDF.count from previous matrix")
+                println(s"Loaded ${previousMatrixDF.count} from previous matrix")
                 previousMatrixDF
                     .write
                     .mode("append")
                     .parquet(outDirPrefix + "/" + maxDateUserData)
-                println(s"try to save into current $maxDateUserData")
+                println(s"try to save into current '$outDirPrefix/$maxDateUserData'")
+
+                val checkRead = spark
+                    .read
+                    .parquet(outDirPrefix + "/" + maxDateUserData)
+                println(s"rows was saved into CURRENT matrix: ${checkRead.count}")
+
             }
-            else{
+            else {
                 println("not found previous matrix data")
             }
         }

@@ -107,7 +107,6 @@ object users_items {
             println("Yes, need to add users from previous matrix")
             val fs = FileSystem.get(spark.sparkContext.hadoopConfiguration)
             val matrixFolders = fs.listStatus(new Path(s"$outDirPrefix")).filter(_.isDirectory).map(_.getPath.toString)
-            println(matrixFolders.getClass)
             println(matrixFolders.mkString(" "))
 
             scala.util.Sorting.quickSort(matrixFolders)
@@ -132,6 +131,9 @@ object users_items {
                     .read
                     .parquet(outDirPrefix + "/" + maxDateUserData)
                 println(s"rows was saved into CURRENT matrix: ${checkRead.count}")
+
+                checkRead.printSchema
+                checkRead.show(false)
 
             }
             else {

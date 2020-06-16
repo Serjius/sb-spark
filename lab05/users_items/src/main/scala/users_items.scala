@@ -118,7 +118,7 @@ object users_items {
                 println(s"Previous path not empty! Try to load from $previousMatrixFolder and add to $maxDateUserData")
                 val previousMatrixDF = spark
                     .read
-                    .parquet(outDirPrefix + "/" + previousMatrixFolder)
+                    .parquet(previousMatrixFolder)
 
                 println(s"Loaded $previousMatrixDF.count from previous matrix")
                 previousMatrixDF
@@ -135,6 +135,12 @@ object users_items {
 
         spark.stop()
         println(s"Application has been done ${ZonedDateTime.now()}")
+        println
+        println
+        println
+        println
+        println
+        println
     }
 
 }

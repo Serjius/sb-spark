@@ -2,7 +2,7 @@ import java.io.File
 import java.time.ZonedDateTime
 import java.util.TimeZone
 
-import org.apache.spark.sql.{SparkSession, functions => f}
+import org.apache.spark.sql.{DataFrame, SparkSession, functions => f}
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
 import org.apache.hadoop.fs.{FileSystem, Path}
 
@@ -58,9 +58,10 @@ object users_items {
                 inputDirPrefix.substring(0, inputDirPrefix.lastIndexOf("/")) + "/users-items"
             else
                 outDirPrefixParam
-
         println(s"Actual output_dir: $outDirPrefix")
 
+
+        //Load data
         println("load all JSON data")
         val allUserDataDF = spark
             .read
@@ -72,10 +73,11 @@ object users_items {
         allUserDataDF.show(false)
         println(s"all user count ${allUserDataDF.count}")
 
+        //Get Max Data
         val maxDateUserData = allUserDataDF.agg(f.max("date")).head().getString(0)
         println(s"Max date $maxDateUserData  ${maxDateUserData.getClass}")
 
-
+        //Clear Data
         println("generate item name")
         val itemsDF = allUserDataDF
             .select(f.col("uid"), f.col("item_id"), f.col("event_type"), f.lit(1).alias("count"))
@@ -91,89 +93,26 @@ object users_items {
         itemsDF.show(false)
         println(s"all user count ${itemsDF.count}")
 
-
-        println("distinct column list")
-        val itemList = itemsDF.select("item_name").distinct().collect().map(_ (0)).toList
-        println(s"distinct items categories for NOT NULL users ${itemList.size}")
-
-        println("pivot table")
-        val resultDF = itemsDF
-            .groupBy("uid")
-            .pivot("item_name", itemList)
-            .sum("count")
-            .na.fill(0)
-            .cache()
-
+        val resultDF = pivotItems(itemsDF)
         println(s"rows in CURRENT pivoted table: ${resultDF.count}")
-        println("Write result to parquet")
-        resultDF
+
+        println("check if addPreviousMatrix mode enabled")
+        val previousMatrixDF = loadPrevMatrixOrEmpty(spark = spark, loadPrevMatrixFlag = addPreviousMatrix, currentMatrixDir = maxDateUserData, outDir = outDirPrefix)
+        println(s"from previous matrix loaded: ${previousMatrixDF.count}")
+
+        println("Union 2 matrix")
+        val unionDF = resultDF.union(previousMatrixDF)
+        println(s"Rows in union matrix: ${unionDF.count}")
+
+        println(s"Save union result to parquet to $outDirPrefix/$maxDateUserData")
+        unionDF
             .write
             .mode("overwrite")
-            .parquet(outDirPrefix + "/" + maxDateUserData)
-        println("Done")
-
-        println("check if addPreviousMatrix mode")
-        if (addPreviousMatrix == "1") {
-            println("Yes, need to add users from previous matrix")
-
-            val fs = FileSystem.get(spark.sparkContext.hadoopConfiguration)
-
-            val matrixFolders =
-                if (outDirPrefix.startsWith(localFileSystemPrefix))
-                    new File(outDirPrefix.substring(localFileSystemPrefix.length))
-                        .listFiles
-                        .filter(_.isDirectory)
-                        .map(_.getPath)
-                else
-                    fs.listStatus(new Path(outDirPrefix))
-                        .filter(_.isDirectory)
-                        .map(_.getPath.toString)
+            .parquet(s"$outDirPrefix/$maxDateUserData")
+        println("Save done")
 
 
-            println("Found previous matrix folders:")
-            println(matrixFolders.mkString(" "))
-
-
-            scala.util.Sorting.quickSort(matrixFolders)
-            val sortedMatrixFolders = matrixFolders.filter(!_.contains(maxDateUserData)).reverse
-            val previousMatrixFolder = if (sortedMatrixFolders.isEmpty) "" else sortedMatrixFolders(0)
-
-            if (!previousMatrixFolder.isEmpty) {
-                println(s"Path to previous matrix is not empty!")
-                val previousMatrixFolderWithPrefix =
-                    if (outDirPrefix.startsWith(localFileSystemPrefix))
-                        localFileSystemPrefix + previousMatrixFolder
-                    else
-                        previousMatrixFolder
-                println(s"Try to load from '$previousMatrixFolderWithPrefix' and append to '$outDirPrefix/$maxDateUserData'")
-                val previousMatrixDF = spark
-                    .read
-                    .parquet(previousMatrixFolderWithPrefix)
-                    .na.fill(0)
-
-                println(s"Loaded ${previousMatrixDF.count} from previous matrix")
-                previousMatrixDF
-                    .write
-                    .mode("append")
-                    .parquet(outDirPrefix + "/" + maxDateUserData)
-                println(s"try to append into current matrix '$outDirPrefix/$maxDateUserData'")
-
-                val checkRead = spark
-                    .read
-                    .parquet(outDirPrefix + "/" + maxDateUserData)
-                println(s"rows was saved into CURRENT matrix: ${checkRead.count}")
-
-                checkRead.filter(f.col("uid") === "03001878-d923-4880-9c69-8b6884c7ad0e")
-                    .show(numRows = 1, truncate = 100, vertical = true)
-
-                checkRead.filter(f.col("uid") === "83952311b9d9494638e34ea9969c8edd")
-                    .show(numRows = 1, truncate = 100, vertical = true)
-            }
-            else {
-                println("not found previous matrix data")
-            }
-        }
-        println("Done")
+        checkResult(spark = spark, currentMatrixDir = maxDateUserData, outDir = outDirPrefix)
 
         spark.stop()
         println(s"Application has been done ${ZonedDateTime.now()}")
@@ -183,6 +122,89 @@ object users_items {
         println
         println
         println
+    }
+
+    private def pivotItems(df: DataFrame) = {
+
+        println("Form distinct column list")
+        val itemList = df.select("item_name").distinct().collect().map(_ (0)).toList
+        println(s"distinct items categories for NOT NULL users ${itemList.size}")
+
+        println("pivot table")
+        df
+            .groupBy("uid")
+            .pivot("item_name", itemList)
+            .sum("count")
+            .na.fill(0)
+            .cache()
+    }
+
+    def checkResult(spark: SparkSession, outDir: String, currentMatrixDir: String): Unit = {
+        println("Load 2 users from result for check ")
+        val checkRead = spark
+            .read
+            .parquet(s"$outDir/$currentMatrixDir")
+        println(s"rows was saved into CURRENT matrix: ${checkRead.count}")
+
+        checkRead.filter(f.col("uid") === "03001878-d923-4880-9c69-8b6884c7ad0e")
+            .show(numRows = 1, truncate = 100, vertical = true)
+
+        checkRead.filter(f.col("uid") === "83952311b9d9494638e34ea9969c8edd")
+            .show(numRows = 1, truncate = 100, vertical = true)
+    }
+
+    private def loadPrevMatrixOrEmpty(spark: SparkSession, loadPrevMatrixFlag: String, outDir: String, currentMatrixDir: String) = {
+        def findPrevMatrixFolder() = {
+            val fs = FileSystem.get(spark.sparkContext.hadoopConfiguration)
+
+            val matrixFolders =
+                if (outDir.startsWith(localFileSystemPrefix))
+                    new File(outDir.substring(localFileSystemPrefix.length))
+                        .listFiles
+                        .filter(_.isDirectory)
+                        .map(_.getPath)
+                else
+                    fs.listStatus(new Path(outDir))
+                        .filter(_.isDirectory)
+                        .map(_.getPath.toString)
+
+            println("Previous matrix folders were found:")
+            println(matrixFolders.mkString(" "))
+
+            scala.util.Sorting.quickSort(matrixFolders)
+            val sortedMatrixFolders = matrixFolders.filter(!_.contains(currentMatrixDir)).reverse
+            val previousMatrixFolder = if (sortedMatrixFolders.isEmpty) "" else sortedMatrixFolders(0)
+            previousMatrixFolder
+        }
+
+        if (loadPrevMatrixFlag == "1") {
+            println("Yes, need to add users from previous matrix")
+
+            val previousMatrixFolder = findPrevMatrixFolder()
+
+            if (!previousMatrixFolder.isEmpty) {
+                println(s"Path to previous matrix is not empty!")
+                val previousMatrixFolderWithPrefix =
+                    if (outDir.startsWith(localFileSystemPrefix))
+                        localFileSystemPrefix + previousMatrixFolder
+                    else
+                        previousMatrixFolder
+                println(s"Try to load from '$previousMatrixFolderWithPrefix' and append to '$outDir/$currentMatrixDir'")
+
+                //load prev matrix
+                spark
+                    .read
+                    .parquet(previousMatrixFolderWithPrefix)
+                    .na.fill(0)
+            }
+            else {
+                println("not found previous matrix data")
+                spark.emptyDataFrame
+            }
+        }
+        else {
+            spark.emptyDataFrame
+        }
     }
 
 }

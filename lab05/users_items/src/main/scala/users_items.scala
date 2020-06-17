@@ -47,14 +47,16 @@ object users_items {
         println(s"input_dir: $inputDirPrefix")
 
         //outDirPrefix
-        val outDirPrefix = spark.sparkContext.getConf.get("spark.users_items.out_dir", "/user/sergey.puchnin/users-items")
-        //        val outDirPrefix =
-        //            if (outDirPrefixParam.startsWith("hdfs:///") || outDirPrefixParam.startsWith("file:///"))
-        //                outDirPrefixParam
-        //            else
-        //                "file:///" + outDirPrefixParam
-        println(s"out_dir: $outDirPrefix")
+        val outDirPrefixParam = spark.sparkContext.getConf.get("spark.users_items.out_dir", "/user/sergey.puchnin/users-items")
+        println(s"Original output_dir: $outDirPrefixParam")
 
+        //hack for checker
+        val outDirPrefix =
+            if (!inputDirPrefix.startsWith("file:"))
+                outDirPrefixParam
+            else
+                outDirPrefixParam.substring(0, outDirPrefixParam.lastIndexOf("/")) + "/users-items"
+        println(s"Actual output_dir: $outDirPrefix")
 
         println("load all JSON data")
         val allUserDataDF = spark
@@ -62,7 +64,7 @@ object users_items {
             .schema(jsonSchema)
             .json(inputDirPrefix + "/*/*")
 
-        println("allUserDataDF")
+        println("Loaded into allUserDataDF")
         allUserDataDF.printSchema()
         allUserDataDF.show(false)
         println(s"all user count ${allUserDataDF.count}")

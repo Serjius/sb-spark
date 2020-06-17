@@ -101,7 +101,7 @@ object users_items {
         println(s"from previous matrix loaded: ${previousMatrixDF.count}")
 
         println("Union 2 matrix")
-        val unionDF = resultDF.union(previousMatrixDF)
+        val unionDF = union2Matrix(resultDF, previousMatrixDF)
         println(s"Rows in union matrix: ${unionDF.count}")
 
         println(s"Save union result to parquet to $outDirPrefix/$maxDateUserData")
@@ -122,6 +122,23 @@ object users_items {
         println
         println
         println
+    }
+
+    private def union2Matrix(df1: DataFrame, df2: DataFrame): DataFrame = {
+        val uniCols = df1.columns.union(df2.columns).toSet
+        val df1Cols = df1.columns.toSet
+        val df2Cols = df2.columns.toSet
+
+        def addMissedFields(myCols: Set[String], unionCols: Set[String]) = {
+            unionCols.toList.map {
+                case x if myCols.contains(x) => f.col(x)
+                case x => f.lit(null).as(x)
+            }
+        }
+
+        df1.select(addMissedFields(df1Cols, uniCols): _*).unionByName(df2.select(addMissedFields(df2Cols, uniCols): _*))
+
+
     }
 
     private def pivotItems(df: DataFrame) = {

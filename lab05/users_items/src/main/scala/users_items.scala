@@ -47,12 +47,12 @@ object users_items {
         println(s"input_dir: $inputDirPrefix")
 
         //outDirPrefix
-        val outDirPrefixParam = spark.sparkContext.getConf.get("spark.users_items.out_dir", "/user/sergey.puchnin/users-items")
-        val outDirPrefix =
-            if (outDirPrefixParam.startsWith("hdfs:///") || outDirPrefixParam.startsWith("file:///"))
-                outDirPrefixParam
-            else
-                "file:///" + outDirPrefixParam
+        val outDirPrefix = spark.sparkContext.getConf.get("spark.users_items.out_dir", "/user/sergey.puchnin/users-items")
+        //        val outDirPrefix =
+        //            if (outDirPrefixParam.startsWith("hdfs:///") || outDirPrefixParam.startsWith("file:///"))
+        //                outDirPrefixParam
+        //            else
+        //                "file:///" + outDirPrefixParam
         println(s"out_dir: $outDirPrefix")
 
 

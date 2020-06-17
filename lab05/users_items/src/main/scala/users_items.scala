@@ -54,10 +54,11 @@ object users_items {
 
         //hack for checker
         val outDirPrefix =
-            if (!inputDirPrefix.startsWith(localFileSystemPrefix))
-                outDirPrefixParam
-            else
+            if (inputDirPrefix.startsWith(localFileSystemPrefix))
                 inputDirPrefix.substring(0, inputDirPrefix.lastIndexOf("/")) + "/users-items"
+            else
+                outDirPrefixParam
+
         println(s"Actual output_dir: $outDirPrefix")
 
         println("load all JSON data")
@@ -115,7 +116,6 @@ object users_items {
         if (addPreviousMatrix == "1") {
             println("Yes, need to add users from previous matrix")
 
-
             val fs = FileSystem.get(spark.sparkContext.hadoopConfiguration)
 
             val matrixFolders =
@@ -130,20 +130,23 @@ object users_items {
                         .map(_.getPath.toString)
 
 
-            println("Found previous matrix folders")
+            println("Found previous matrix folders:")
             println(matrixFolders.mkString(" "))
 
 
             scala.util.Sorting.quickSort(matrixFolders)
             val sortedMatrixFolders = matrixFolders.filter(!_.contains(maxDateUserData)).reverse
-            val previousMatrixFolder = if (!sortedMatrixFolders.isEmpty) sortedMatrixFolders(0) else ""
+            val previousMatrixFolder = if (sortedMatrixFolders.isEmpty) "" else sortedMatrixFolders(0)
 
             if (!previousMatrixFolder.isEmpty) {
                 println(s"Path to previous matrix is not empty!")
-                println(s"Try to load from '$previousMatrixFolder' and append to '$outDirPrefix/$maxDateUserData'")
+                val previousMatrixFolderWithPrefix = if (outDirPrefix.startsWith(localFileSystemPrefix)) localFileSystemPrefix + previousMatrixFolder
+                else
+                    previousMatrixFolder
+                println(s"Try to load from '$previousMatrixFolderWithPrefix' and append to '$outDirPrefix/$maxDateUserData'")
                 val previousMatrixDF = spark
                     .read
-                    .parquet(previousMatrixFolder)
+                    .parquet(previousMatrixFolderWithPrefix)
                     .na.fill(0)
 
                 println(s"Loaded ${previousMatrixDF.count} from previous matrix")

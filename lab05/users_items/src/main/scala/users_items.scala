@@ -133,8 +133,12 @@ object users_items {
                 println(s"rows was saved into CURRENT matrix: ${checkRead.count}")
 
                 checkRead.printSchema
-                checkRead.show(false)
 
+                checkRead.filter(f.col("uid") === "03001878-d923-4880-9c69-8b6884c7ad0e")
+                    .show(numRows = 1, truncate = 100, vertical =  true)
+
+                checkRead.filter(f.col("uid") === "83952311b9d9494638e34ea9969c8edd")
+                    .show(numRows = 1, truncate = 100, vertical =  true)
             }
             else {
                 println("not found previous matrix data")

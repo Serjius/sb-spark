@@ -52,10 +52,10 @@ object users_items {
 
         //hack for checker
         val outDirPrefix =
-            if (!inputDirPrefix.startsWith("file:"))
+            if (!inputDirPrefix.startsWith("file:///"))
                 outDirPrefixParam
             else
-                outDirPrefixParam.substring(0, outDirPrefixParam.lastIndexOf("/")) + "/users-items"
+                inputDirPrefix.substring(0, inputDirPrefix.lastIndexOf("/")) + "/users-items"
         println(s"Actual output_dir: $outDirPrefix")
 
         println("load all JSON data")

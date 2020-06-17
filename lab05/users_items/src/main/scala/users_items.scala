@@ -47,7 +47,12 @@ object users_items {
         println(s"input_dir: $inputDirPrefix")
 
         //outDirPrefix
-        val outDirPrefix = spark.sparkContext.getConf.get("spark.users_items.out_dir", "/user/sergey.puchnin/users-items")
+        val outDirPrefixParam = spark.sparkContext.getConf.get("spark.users_items.out_dir", "/user/sergey.puchnin/users-items")
+        val outDirPrefix =
+            if (outDirPrefixParam.startsWith("hdfs:///") || outDirPrefixParam.startsWith("file:///"))
+                outDirPrefixParam
+            else
+                "file:///" + outDirPrefixParam
         println(s"out_dir: $outDirPrefix")
 
 
@@ -119,6 +124,7 @@ object users_items {
                 val previousMatrixDF = spark
                     .read
                     .parquet(previousMatrixFolder)
+                    .na.fill(0)
 
                 println(s"Loaded ${previousMatrixDF.count} from previous matrix")
                 previousMatrixDF
@@ -135,10 +141,10 @@ object users_items {
                 checkRead.printSchema
 
                 checkRead.filter(f.col("uid") === "03001878-d923-4880-9c69-8b6884c7ad0e")
-                    .show(numRows = 1, truncate = 100, vertical =  true)
+                    .show(numRows = 1, truncate = 100, vertical = true)
 
                 checkRead.filter(f.col("uid") === "83952311b9d9494638e34ea9969c8edd")
-                    .show(numRows = 1, truncate = 100, vertical =  true)
+                    .show(numRows = 1, truncate = 100, vertical = true)
             }
             else {
                 println("not found previous matrix data")

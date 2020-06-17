@@ -140,9 +140,11 @@ object users_items {
 
             if (!previousMatrixFolder.isEmpty) {
                 println(s"Path to previous matrix is not empty!")
-                val previousMatrixFolderWithPrefix = if (outDirPrefix.startsWith(localFileSystemPrefix)) localFileSystemPrefix + previousMatrixFolder
-                else
-                    previousMatrixFolder
+                val previousMatrixFolderWithPrefix =
+                    if (outDirPrefix.startsWith(localFileSystemPrefix))
+                        localFileSystemPrefix + previousMatrixFolder
+                    else
+                        previousMatrixFolder
                 println(s"Try to load from '$previousMatrixFolderWithPrefix' and append to '$outDirPrefix/$maxDateUserData'")
                 val previousMatrixDF = spark
                     .read

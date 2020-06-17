@@ -1,3 +1,4 @@
+import java.io.File
 import java.time.ZonedDateTime
 import java.util.TimeZone
 
@@ -7,6 +8,7 @@ import org.apache.hadoop.fs.{FileSystem, Path}
 
 object users_items {
 
+    private val localFileSystemPrefix = "file://"
     private val jsonSchema = StructType(
         Array(
             StructField("event_type", StringType),
@@ -52,7 +54,7 @@ object users_items {
 
         //hack for checker
         val outDirPrefix =
-            if (!inputDirPrefix.startsWith("file:///"))
+            if (!inputDirPrefix.startsWith(localFileSystemPrefix))
                 outDirPrefixParam
             else
                 inputDirPrefix.substring(0, inputDirPrefix.lastIndexOf("/")) + "/users-items"
@@ -112,17 +114,33 @@ object users_items {
         println("check if addPreviousMatrix mode")
         if (addPreviousMatrix == "1") {
             println("Yes, need to add users from previous matrix")
+
+
             val fs = FileSystem.get(spark.sparkContext.hadoopConfiguration)
-            val matrixFolders = fs.listStatus(new Path(s"$outDirPrefix")).filter(_.isDirectory).map(_.getPath.toString)
+
+            val matrixFolders =
+                if (outDirPrefix.startsWith(localFileSystemPrefix))
+                    new File(outDirPrefix.substring(localFileSystemPrefix.length))
+                        .listFiles
+                        .filter(_.isDirectory)
+                        .map(_.getPath)
+                else
+                    fs.listStatus(new Path(outDirPrefix))
+                        .filter(_.isDirectory)
+                        .map(_.getPath.toString)
+
+
+            println("Found previous matrix folders")
             println(matrixFolders.mkString(" "))
+
 
             scala.util.Sorting.quickSort(matrixFolders)
             val sortedMatrixFolders = matrixFolders.filter(!_.contains(maxDateUserData)).reverse
             val previousMatrixFolder = if (!sortedMatrixFolders.isEmpty) sortedMatrixFolders(0) else ""
 
             if (!previousMatrixFolder.isEmpty) {
-                println(s"Previous path not empty!")
-                println(s"Try to load from '$previousMatrixFolder' and add to '$outDirPrefix/$maxDateUserData'")
+                println(s"Path to previous matrix is not empty!")
+                println(s"Try to load from '$previousMatrixFolder' and append to '$outDirPrefix/$maxDateUserData'")
                 val previousMatrixDF = spark
                     .read
                     .parquet(previousMatrixFolder)
@@ -133,14 +151,12 @@ object users_items {
                     .write
                     .mode("append")
                     .parquet(outDirPrefix + "/" + maxDateUserData)
-                println(s"try to save into current '$outDirPrefix/$maxDateUserData'")
+                println(s"try to append into current matrix '$outDirPrefix/$maxDateUserData'")
 
                 val checkRead = spark
                     .read
                     .parquet(outDirPrefix + "/" + maxDateUserData)
                 println(s"rows was saved into CURRENT matrix: ${checkRead.count}")
-
-                checkRead.printSchema
 
                 checkRead.filter(f.col("uid") === "03001878-d923-4880-9c69-8b6884c7ad0e")
                     .show(numRows = 1, truncate = 100, vertical = true)

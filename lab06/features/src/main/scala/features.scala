@@ -2,7 +2,7 @@ import org.apache.spark.sql.{DataFrame, functions => f}
 import java.time.ZonedDateTime
 import java.util.TimeZone
 
-import org.apache.spark.ml.feature.{CountVectorizer, Tokenizer}
+import org.apache.spark.ml.feature.{CountVectorizer}
 
 
 object features extends SparkSupport {
@@ -95,7 +95,7 @@ object features extends SparkSupport {
         wordsDF.cache()
 */
 
-        val countVectorizer = new CountVectorizer().setInputCol("domain").setOutputCol("features")
+        val countVectorizer = new CountVectorizer().setInputCol("domain").setOutputCol("domain_features")
         val countVectorModel = countVectorizer.fit(onlyFeatureDF)
         val featureDF = countVectorModel.transform(onlyFeatureDF)
 
@@ -115,8 +115,8 @@ object features extends SparkSupport {
         totalDF.printSchema
 
         val itemsDF = spark.read.parquet(ItemMatrixFile)
-        itemsDF.printSchema
         println(s"itemsDF rows ${itemsDF.count}")
+        itemsDF.printSchema
 
         val finalDF = totalDF.join(itemsDF, Seq("uid"), "inner")
         finalDF
@@ -124,6 +124,14 @@ object features extends SparkSupport {
             .mode("overwrite")
             .parquet(s"$OutPutFolder")
         println("Save done")
+
+        println
+        println
+        println
+        println
+        println
+        println(s"finalDF rows ${finalDF.count}")
+        finalDF.printSchema
 
 
         println()
@@ -173,6 +181,8 @@ object features extends SparkSupport {
         //        wordsDF
         //            .filter(f.col("uid") === TestUserId)
         //            .show(numRows = 10, truncate = 120, vertical = false)
+
+
 
         spark.stop()
         println("Application has been done")

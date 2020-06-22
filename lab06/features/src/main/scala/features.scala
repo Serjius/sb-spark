@@ -2,7 +2,8 @@ import org.apache.spark.sql.{DataFrame, functions => f}
 import java.time.ZonedDateTime
 import java.util.TimeZone
 
-import org.apache.spark.ml.feature.{CountVectorizer}
+import org.apache.spark.ml.feature.CountVectorizer
+import org.apache.spark.ml.linalg.SparseVector
 
 
 object features extends SparkSupport {
@@ -95,10 +96,12 @@ object features extends SparkSupport {
         wordsDF.cache()
 */
 
-        val countVectorizer = new CountVectorizer().setInputCol("domain").setOutputCol("domain_features")
+        val countVectorizer = new CountVectorizer().setInputCol("domain").setOutputCol("features")
         val countVectorModel = countVectorizer.fit(onlyFeatureDF)
         val featureDF = countVectorModel.transform(onlyFeatureDF)
 
+
+        val asDense = f.udf((v: SparseVector) => v.toDense)
 
         //Gather total DF
         val totalDF = featureDF
@@ -109,7 +112,10 @@ object features extends SparkSupport {
             .drop("sum_work_hours")
             .drop("sum_evening_hours")
             .drop("total_count")
+            .withColumn("domain_features", asDense(f.col("features")))
             .na.fill(0)
+            .drop("features")
+
         println("Join to final log DF")
         println(s"Count in ${totalDF.count}")
         totalDF.printSchema
@@ -118,7 +124,9 @@ object features extends SparkSupport {
         println(s"itemsDF rows ${itemsDF.count}")
         itemsDF.printSchema
 
-        val finalDF = totalDF.join(itemsDF, Seq("uid"), "inner")
+        val finalDF = totalDF
+            .join(itemsDF, Seq("uid"), "inner")
+
         finalDF
             .write
             .mode("overwrite")

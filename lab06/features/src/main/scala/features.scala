@@ -8,7 +8,7 @@ import org.apache.spark.ml.linalg.SparseVector
 
 object features extends SparkSupport {
     private val WebLogs = "hdfs:///labs/laba03/weblogs.json"
-    private val TestUserId = "d50192e5-c44e-4ae8-ae7a-7cfe67c8b777"
+    private val TestUserId = "d502331d-621e-4721-ada2-5d30b2c3801f"
     private val TopDomain = 1000
     private val ItemMatrixFile = "users-items/20200429"
     private val OutPutFolder = "features"
@@ -34,8 +34,6 @@ object features extends SparkSupport {
         println(s"Data has been cleaned. Rows: ${cleanedDF.count}")
         println(s"Describe cleanedDF")
         describeDF(cleanedDF)
-
-        //showTestUser(cleanedDF, TestUserId)
 
         //check broken parsing
         //cleanedDF.filter(f.col("domain") === "http").show(numRows = 10, truncate = 120, vertical = true)
@@ -89,19 +87,17 @@ object features extends SparkSupport {
             .agg(f.collect_list("domain").alias("domain"))
             .cache
 
-        /*
-
-        val tokenizer = new Tokenizer().setInputCol("domain").setOutputCol("words")
-        val wordsDF = tokenizer.transform(onlyFeatureDF)
-        wordsDF.cache()
-*/
-
         val countVectorizer = new CountVectorizer().setInputCol("domain").setOutputCol("features")
         val countVectorModel = countVectorizer.fit(onlyFeatureDF)
         val featureDF = countVectorModel.transform(onlyFeatureDF)
 
 
-        val asDense = f.udf((v: SparseVector) => v.toDense)
+        val alphaOrderFeatures = countVectorModel.vocabulary.zipWithIndex.sortBy(_._1).map(_._2)
+
+        val asArray = f.udf((v: SparseVector) => {
+            val va = v.toDense.toArray
+            alphaOrderFeatures.map(va(_))
+        })
 
         //Gather total DF
         val totalDF = featureDF
@@ -112,7 +108,7 @@ object features extends SparkSupport {
             .drop("sum_work_hours")
             .drop("sum_evening_hours")
             .drop("total_count")
-            .withColumn("domain_features", asDense(f.col("features")))
+            .withColumn("domain_features", asArray(f.col("features")))
             .na.fill(0)
             .drop("features")
 
@@ -141,6 +137,9 @@ object features extends SparkSupport {
         println(s"finalDF rows ${finalDF.count}")
         finalDF.printSchema
 
+
+        val df1 = spark.read.parquet(s"$OutPutFolder")
+        println(s"Read it back rows ${df1.count}")
 
         println()
         println()
@@ -183,13 +182,12 @@ object features extends SparkSupport {
         println("User#1 Data from TotalDF")
         totalDF
             .filter(f.col("uid") === TestUserId)
-            .show(numRows = 10, truncate = 120, vertical = true)
-        //
-        //        println("User#1 Data from wordsDF")
-        //        wordsDF
-        //            .filter(f.col("uid") === TestUserId)
-        //            .show(numRows = 10, truncate = 120, vertical = false)
+            .show(numRows = 10, truncate = 80, vertical = true)
 
+
+        val vocabulary = countVectorModel.vocabulary.zipWithIndex.sortBy(_._1).take(10)
+        println(s"Top 10 in alpha order: ${vocabulary.mkString(" ")}")
+        println(s"Only indices  ${vocabulary.map(_._2).mkString(" ")}")
 
 
         spark.stop()

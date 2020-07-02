@@ -37,11 +37,16 @@ object test extends SparkSupport {
     )
 
     def getConf: lab07TestConfig = {
+        import org.apache.hadoop.fs.{FileSystem, Path}
+
         val modelPath = spark.sparkContext.getConf.get("spark.test.model.input_path")
         val kafkaBroker = spark.sparkContext.getConf.get("spark.test.kafka.broker")
         val inputTopic = spark.sparkContext.getConf.get("spark.test.kafka.input_topic")
         val outputTopic = spark.sparkContext.getConf.get("spark.test.kafka.output_topic")
         val checkpointPath = spark.sparkContext.getConf.get("spark.test.kafka.checkPointsPath")
+
+
+        FileSystem.get(new org.apache.hadoop.conf.Configuration).delete(new Path(checkpointPath), true)
 
         val config = lab07TestConfig(
             modelPath,
@@ -78,7 +83,7 @@ object test extends SparkSupport {
             .withColumn("web_url", f.col("visitsList.url"))
             .withColumn("domain", f.lower(f.callUDF("parse_url", f.col("web_url"), f.lit("HOST"))))
             .withColumn("domain", f.regexp_replace(f.col("domain"), "^www.", ""))
-            .filter(f.col("domain").isNotNull)
+            //.filter(f.col("domain").isNotNull)
 
         df.select("uid", "domain")
     }
@@ -107,7 +112,7 @@ object test extends SparkSupport {
             .option("kafka.bootstrap.servers", config.kafkaBroker)
             .option("topic", config.outputTopic)
             .outputMode("update")
-            .trigger(org.apache.spark.sql.streaming.Trigger.ProcessingTime("10 seconds"))
+            .trigger(Trigger.ProcessingTime("10 seconds"))
             .option("checkpointLocation", config.checkpointPath)
             .start
             .awaitTermination

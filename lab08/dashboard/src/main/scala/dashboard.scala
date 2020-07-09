@@ -1,8 +1,6 @@
 import org.apache.spark.ml.PipelineModel
 import org.apache.spark.sql.{DataFrame, functions => f}
 
-import scala.io.Source
-
 
 object dashboard extends SparkSupport {
     def main(args: Array[String]): Unit = {
@@ -27,7 +25,7 @@ object dashboard extends SparkSupport {
                           )
 
     private def loadPassword(): String = {
-
+        import scala.io.Source
         try {
             val in = "secret.txt"
             val src = Source.fromFile(in)
@@ -125,7 +123,7 @@ object dashboard extends SparkSupport {
                 "es.net.http.auth.pass" -> config.elasticPassword
             )
 
-        df.toJSON
+        df
             .write
             .mode("append")
             .format("org.elasticsearch.spark.sql")

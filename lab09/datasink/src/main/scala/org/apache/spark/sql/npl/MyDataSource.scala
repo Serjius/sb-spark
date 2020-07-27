@@ -16,12 +16,11 @@ class MyDataSource extends StreamSourceProvider with Logging {
                               parameters: Map[String, String]): (String, StructType) = {
         logInfo("sourceSchema call")
         val first = "test"
-        val second = StructType(
-            StructField("id", LongType) ::
-                StructField("foo", StringType) ::
-                Nil
-        )
-        (first, second)
+
+        schema match {
+            case Some(s) => (first, s)
+            case None =>throw new IllegalArgumentException("Schema S must be provide")
+        }
     }
 
     override def createSource(sqlContext: SQLContext,
@@ -32,18 +31,19 @@ class MyDataSource extends StreamSourceProvider with Logging {
 
         logInfo("createSource call")
         logInfo(metadataPath)
-        new MyDataSourceProvider
+
+        schema match {
+            case Some(s) => new MyDataSourceProvider(s)
+            case None =>throw new IllegalArgumentException("Schema C must be provide")
+        }
+
     }
 }
 
-class MyDataSourceProvider extends Source with Logging {
+class MyDataSourceProvider (dataSchema: StructType) extends Source with Logging {
     override def schema: StructType = {
         logInfo("provider schema call")
-        StructType(
-            StructField("id", LongType) ::
-                StructField("foo", StringType) ::
-                Nil
-        )
+        this.dataSchema
     }
 
     override def getOffset: Option[Offset] = {
@@ -60,14 +60,10 @@ class MyDataSourceProvider extends Source with Logging {
         val catalystRows: RDD[InternalRow] = sparkContext.parallelize(0 to 10).map {
             x => InternalRow.fromSeq(Seq(x.toLong, UTF8String.fromString("hello world")))
         }
-        val schema = StructType(
-            StructField("id", LongType) ::
-            StructField("foo", StringType) ::
-            Nil
-        )
+
         val isStreaming = true
 
-        val df = spark.internalCreateDataFrame(catalystRows, schema, isStreaming)
+        val df = spark.internalCreateDataFrame(catalystRows, this.dataSchema, isStreaming)
 
         df
     }

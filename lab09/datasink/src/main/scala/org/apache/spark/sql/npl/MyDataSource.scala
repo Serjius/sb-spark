@@ -6,7 +6,8 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.{DataFrame, SQLContext, SparkSession}
 import org.apache.spark.sql.execution.streaming.{Offset, Source}
 import org.apache.spark.sql.sources.StreamSourceProvider
-import org.apache.spark.sql.types.{LongType, StructField, StructType}
+import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
+import org.apache.spark.unsafe.types.UTF8String
 
 class MyDataSource extends StreamSourceProvider with Logging {
     override def sourceSchema(sqlContext: SQLContext,
@@ -15,7 +16,11 @@ class MyDataSource extends StreamSourceProvider with Logging {
                               parameters: Map[String, String]): (String, StructType) = {
         logInfo("sourceSchema call")
         val first = "test"
-        val second = StructType(StructField("id", LongType) :: Nil)
+        val second = StructType(
+            StructField("id", LongType) ::
+                StructField("foo", StringType) ::
+                Nil
+        )
         (first, second)
     }
 
@@ -26,6 +31,7 @@ class MyDataSource extends StreamSourceProvider with Logging {
                               parameters: Map[String, String]): Source = {
 
         logInfo("createSource call")
+        logInfo(metadataPath)
         new MyDataSourceProvider
     }
 }
@@ -33,7 +39,11 @@ class MyDataSource extends StreamSourceProvider with Logging {
 class MyDataSourceProvider extends Source with Logging {
     override def schema: StructType = {
         logInfo("provider schema call")
-        StructType(StructField("id", LongType) :: Nil)
+        StructType(
+            StructField("id", LongType) ::
+                StructField("foo", StringType) ::
+                Nil
+        )
     }
 
     override def getOffset: Option[Offset] = {
@@ -47,13 +57,17 @@ class MyDataSourceProvider extends Source with Logging {
         //SparkSession.active.range(0, 10).toDF()
         val spark = SparkSession.active
         val sparkContext = spark.sparkContext
-        val catalystRows: RDD[InternalRow] = sparkContext.parallelize(0 to 10).map{
-            x => InternalRow.fromSeq(Seq(x.toLong))
+        val catalystRows: RDD[InternalRow] = sparkContext.parallelize(0 to 10).map {
+            x => InternalRow.fromSeq(Seq(x.toLong, UTF8String.fromString("hello world")))
         }
-        val schema = StructType(StructField("id", LongType) :: Nil)
-        val isStreamin = true
+        val schema = StructType(
+            StructField("id", LongType) ::
+            StructField("foo", StringType) ::
+            Nil
+        )
+        val isStreaming = true
 
-        val df = spark.internalCreateDataFrame(catalystRows, schema, isStreamin)
+        val df = spark.internalCreateDataFrame(catalystRows, schema, isStreaming)
 
         df
     }

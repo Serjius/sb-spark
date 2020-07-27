@@ -9,5 +9,7 @@ class MyDataSourceSpec extends FlatSpec with Matchers {
     val spark = SparkSession.builder().master(master = "local[1]").getOrCreate()
     val df = spark.readStream.format(source = "org.apache.spark.sql.npl.MyDataSource").load()
 
-    df.writeStream.format("console").trigger(Trigger.Once()).start().awaitTermination()
+    df.writeStream
+        //.option("checkpointLocation", "target/ch1")
+        .format("console").trigger(Trigger.Once()).start().awaitTermination()
 }

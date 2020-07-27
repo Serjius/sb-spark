@@ -1,6 +1,8 @@
-package com.npl
+package org.apache.spark.sql.npl
 
 import org.apache.spark.internal.Logging
+import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.{DataFrame, SQLContext, SparkSession}
 import org.apache.spark.sql.execution.streaming.{Offset, Source}
 import org.apache.spark.sql.sources.StreamSourceProvider
@@ -36,16 +38,34 @@ class MyDataSourceProvider extends Source with Logging {
 
     override def getOffset: Option[Offset] = {
         logInfo("provider getOffset call")
-        Option.empty[Offset]
+        //Option.empty[Offset]
+        Some(new MyOffset)
     }
 
     override def getBatch(start: Option[Offset], end: Offset): DataFrame = {
         logInfo("provider getBatch call")
-        SparkSession.active.range(0, 10).toDF()
+        //SparkSession.active.range(0, 10).toDF()
+        val spark = SparkSession.active
+        val sparkContext = spark.sparkContext
+        val catalystRows: RDD[InternalRow] = sparkContext.parallelize(0 to 10).map{
+            x => InternalRow.fromSeq(Seq(x.toLong))
+        }
+        val schema = StructType(StructField("id", LongType) :: Nil)
+        val isStreamin = true
+
+        val df = spark.internalCreateDataFrame(catalystRows, schema, isStreamin)
+
+        df
     }
 
     override def stop(): Unit = {
         logInfo("provider stop call")
         Unit
+    }
+}
+
+class MyOffset extends Offset {
+    override def json(): String = {
+        "test"
     }
 }

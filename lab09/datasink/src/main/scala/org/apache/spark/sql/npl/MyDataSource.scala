@@ -63,7 +63,7 @@ class MyDataSourceProvider(dataSchema: StructType) extends Source with Logging {
         logInfo(s"Offsets: start=$start, end=$end")
 
         val startingOffset = start match {
-            case Some(x) => x.json().toInt * 5
+            case Some(x) => x.json().toInt * 5 + 1
             case None => 0
         }
         val endingOffset = end.json.toInt * 5

@@ -7,21 +7,24 @@ import org.scalatest.{FlatSpec, Matchers}
 
 class MyDataSourceSpec extends FlatSpec with Matchers {
 
-    val spark = SparkSession.builder().master(master = "local[1]").getOrCreate()
-    val schema = StructType(
-        StructField("id", LongType)::
-        StructField("foo", StringType)::
-        Nil
+    private val spark = SparkSession.builder().master(master = "local[1]").getOrCreate()
+    private val schema = StructType(
+        StructField("id", LongType) ::
+            StructField("foo", StringType) ::
+            Nil
     )
-    val df = spark.readStream
-        .format(source = "org.apache.spark.sql.npl.MyDataSource")
+    private val df = spark.readStream
+        .format(source = "org.apache.spark.sql.npl.MyDataSourceProvider")
         .schema(schema)
         .option("step", 10)
         .load()
+        .groupBy("foo")
+        .count
 
     df.writeStream
+        .outputMode("complete")
         .option("checkpointLocation", "target/ch3")
-        .format(source = "org.apache.spark.sql.npl.MyDataSink")
+        .format(source = "org.apache.spark.sql.npl.MyDataSinkProvider")
         .trigger(Trigger.ProcessingTime(5000))
         .start()
         .awaitTermination(20000)

@@ -19,6 +19,9 @@ class MyDataSourceSpec extends FlatSpec with Matchers {
         .load()
 
     df.writeStream
-        //.option("checkpointLocation", "target/ch1")
-        .format("console").trigger(Trigger.Once()).start().awaitTermination()
+        //.option("checkpointLocation", "target/ch2")
+        .format("console")
+        .trigger(Trigger.ProcessingTime(5000))
+        .start()
+        .awaitTermination(20000)
 }

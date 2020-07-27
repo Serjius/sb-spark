@@ -15,13 +15,14 @@ class MyDataSinkProvider extends StreamSinkProvider with Logging {
                             outputMode: OutputMode): Sink = {
         logInfo("sink createSink call")
         logInfo(outputMode.toString)
-        new MyDataSink
+        new MyDataSink (parameters)
     }
 }
 
-class MyDataSink extends Sink with Logging {
+class MyDataSink (parameters: Map[String,String]) extends Sink with Logging {
     override def addBatch(batchId: Long, data: DataFrame): Unit = {
         logInfo("sink addBatch call")
+        logInfo(parameters.mkString(","))
 
         val rdd = data.queryExecution.executedPlan.execute()
 

@@ -16,6 +16,7 @@ class MyDataSourceSpec extends FlatSpec with Matchers {
     val df = spark.readStream
         .format(source = "org.apache.spark.sql.npl.MyDataSource")
         .schema(schema)
+        .option("step", 10)
         .load()
 
     df.writeStream

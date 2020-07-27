@@ -33,16 +33,22 @@ class MyDataSource extends StreamSourceProvider with Logging {
         logInfo("createSource call")
         logInfo(metadataPath)
         logInfo(schema.toString)
+        logInfo(providerName)
+
+        val step = parameters.get("step") match {
+            case Some(s) => s.toInt
+            case None => throw new IllegalArgumentException("Step must be provide")
+        }
 
         schema match {
-            case Some(s) => new MyDataSourceProvider(s)
+            case Some(s) => new MyDataSourceProvider(s, step)
             case None => throw new IllegalArgumentException("Schema C must be provide")
         }
 
     }
 }
 
-class MyDataSourceProvider(dataSchema: StructType) extends Source with Logging {
+class MyDataSourceProvider(dataSchema: StructType, step: Int) extends Source with Logging {
     var i = 0
 
     override def schema: StructType = {
@@ -53,9 +59,9 @@ class MyDataSourceProvider(dataSchema: StructType) extends Source with Logging {
     override def getOffset: Option[Offset] = {
         logInfo("provider getOffset call")
         //Option.empty[Offset]
-        val currentOffest = new MyOffset(i)
+        val currentOffset = new MyOffset(i)
         i += 1
-        Some(currentOffest)
+        Some(currentOffset)
     }
 
     override def getBatch(start: Option[Offset], end: Offset): DataFrame = {
@@ -63,15 +69,15 @@ class MyDataSourceProvider(dataSchema: StructType) extends Source with Logging {
         logInfo(s"Offsets: start=$start, end=$end")
 
         val startingOffset = start match {
-            case Some(x) => x.json().toInt * 5 + 1
+            case Some(x) => x.json().toInt * step + 1
             case None => 0
         }
-        val endingOffset = end.json.toInt * 5
+        val endingOffset = end.json.toInt * step
 
         //SparkSession.active.range(0, 10).toDF()
         val spark = SparkSession.active
         val sparkContext = spark.sparkContext
-        //TODO SQL
+        //TODO SQL to create RDD
         val catalystRows: RDD[InternalRow] = sparkContext.parallelize(startingOffset to endingOffset).map {
             x => InternalRow.fromSeq(Seq(x.toLong, UTF8String.fromString("hello world")))
         }

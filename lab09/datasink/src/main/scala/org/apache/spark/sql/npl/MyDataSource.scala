@@ -9,7 +9,7 @@ import org.apache.spark.sql.sources.StreamSourceProvider
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 
-class MyDataSource extends StreamSourceProvider with Logging {
+class MyDataSourceProvider extends StreamSourceProvider with Logging {
     override def sourceSchema(sqlContext: SQLContext,
                               schema: Option[StructType],
                               providerName: String,
@@ -41,14 +41,14 @@ class MyDataSource extends StreamSourceProvider with Logging {
         }
 
         schema match {
-            case Some(s) => new MyDataSourceProvider(s, step)
+            case Some(s) => new MyDataSource(s, step)
             case None => throw new IllegalArgumentException("Schema C must be provide")
         }
 
     }
 }
 
-class MyDataSourceProvider(dataSchema: StructType, step: Int) extends Source with Logging {
+class MyDataSource (dataSchema: StructType, step: Int) extends Source with Logging {
     var i = 0
 
     override def schema: StructType = {

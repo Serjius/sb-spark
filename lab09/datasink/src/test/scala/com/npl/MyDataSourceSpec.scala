@@ -20,8 +20,8 @@ class MyDataSourceSpec extends FlatSpec with Matchers {
         .load()
 
     df.writeStream
-        //.option("checkpointLocation", "target/ch2")
-        .format("console")
+        .option("checkpointLocation", "target/ch3")
+        .format(source = "org.apache.spark.sql.npl.MyDataSink")
         .trigger(Trigger.ProcessingTime(5000))
         .start()
         .awaitTermination(20000)
